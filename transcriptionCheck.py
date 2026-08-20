@@ -1,6 +1,6 @@
 """
-transcriptionCheck.py — run the TVA transcription content checks on any
-delimited or Excel file.
+transcriptionCheck.py — run the transcription content checks on any delimited
+or Excel file.
 
 Standalone: no database, no email, no bucket. Point it at a file (or a folder of
 files), name the column holding the transcription, and it writes an xlsx report
@@ -66,11 +66,14 @@ def read_table(path: Path, sep: str) -> pd.DataFrame:
     return pd.read_csv(path, sep=sep, dtype=str, keep_default_na=False)
 
 
-def collect_inputs(target: Path) -> List[Path]:
+def collect_inputs(target: Path, recursive: bool = False) -> List[Path]:
+    """Every readable file under `target`. A folder yields one report sheet per
+    file, so a whole delivery can be checked in one run."""
     if target.is_file():
         return [target]
     if target.is_dir():
-        return sorted(p for p in target.iterdir()
+        walk = target.rglob("*") if recursive else target.iterdir()
+        return sorted(p for p in walk
                       if p.is_file() and p.suffix.lower() in READABLE_SUFFIXES)
     raise SystemExit(f"Input not found: {target}")
 
@@ -189,7 +192,7 @@ def write_report(summary_rows: List[Dict],
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Run the TVA transcription content checks on a file "
+        description="Run the transcription content checks on a file "
                     "or a folder of files.")
     ap.add_argument("--config", default=str(DEFAULT_CONFIG))
     ap.add_argument("--input", default=None,
@@ -203,6 +206,8 @@ def main() -> int:
     ap.add_argument("--sep", default=None,
                     help="Delimiter for text files (default: tab).")
     ap.add_argument("--out", default=None, help="Output xlsx path.")
+    ap.add_argument("--recursive", action="store_true", default=None,
+                    help="Search sub-folders too when --input is a folder.")
     ap.add_argument("--print-only", action="store_true",
                     help="Print findings, write no report.")
     args = ap.parse_args()
@@ -226,7 +231,9 @@ def main() -> int:
                     cfg.get("INPUT", "blank_values", fallback="").split(",")
                     if v.strip()}
 
-    inputs = collect_inputs(Path(target).expanduser().resolve())
+    recursive = (args.recursive if args.recursive is not None
+                 else cfg.getboolean("INPUT", "recursive", fallback=False))
+    inputs = collect_inputs(Path(target).expanduser().resolve(), recursive)
     if not inputs:
         raise SystemExit(f"No readable files in {target}")
 

@@ -2,9 +2,9 @@
 contentChecks.py — the transcription content checks, as a plain function over a
 DataFrame.
 
-Extracted from the TVA submission pipeline (tvaDeployment/codes/checks.py) with
-the database, email and bucket coupling removed. The set of checks and the order
-they run in are unchanged, so a row that fails here fails there too.
+Extracted from a transcription submission pipeline with the database, email and
+bucket coupling removed, so the checks can be run against any project's data.
+The set of checks and the order they run in are unchanged from the original.
 
 Each enabled check adds one boolean `<check>_error` column to the DataFrame and
 one ERROR Finding per failing row, plus a single batch-level finding when the

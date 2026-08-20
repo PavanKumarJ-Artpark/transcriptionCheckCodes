@@ -1,10 +1,17 @@
 # transcriptionCheck
 
-The TVA transcription content checks, standalone. Point it at a file, name the
-column holding the transcription, get an xlsx report of everything that looks
-wrong with the text.
+Content checks for transcription text. Point it at a file, name the column
+holding the transcription, get an xlsx report of everything that looks wrong
+with the text — unclosed tags, tags glued to words, digits left unspelt,
+characters outside the language's script, and so on.
 
-**No database, no email, no bucket.** It reads a local file and writes a local
+Project-agnostic: every column name, threshold and check is configuration, so
+the same tool runs over any project's TSV, CSV or Excel export. The code carries
+no project assumptions; `config.cfg` is where the project lives. It ships
+pointed at a QC review export — change the column names under `[INPUT]` for
+anything else.
+
+**No database, no email, no bucket.** It reads local files and writes one local
 report. Nothing else.
 
 ## Install
@@ -17,13 +24,13 @@ pip install -r requirements.txt      # pandas + openpyxl
 
 ```bash
 # a single file
-python transcriptionCheck.py --input delivery_V1.tsv
+python transcriptionCheck.py --input batch.tsv --text-column transcription
 
-# a whole folder — every .tsv/.csv/.txt/.xlsx inside it
+# a folder — every .tsv/.csv/.txt/.xlsx in it, each on its own report sheet
 python transcriptionCheck.py --input someFolder/
 
-# name the column to check
-python transcriptionCheck.py --input batch.tsv --text-column transcription
+# include sub-folders
+python transcriptionCheck.py --input someFolder/ --recursive
 
 # console only, no report file
 python transcriptionCheck.py --input batch.tsv --print-only
@@ -33,7 +40,8 @@ With no `--input` it uses `[INPUT] path` from `config.cfg`. Exit code is 0 when
 nothing is flagged, 1 when any check raises an ERROR.
 
 Flags: `--input`, `--text-column`, `--language-column`, `--key-column`, `--sep`,
-`--out`, `--print-only`, `--config`. Each defaults to its `config.cfg` entry.
+`--recursive`, `--out`, `--print-only`, `--config`. Each defaults to its
+`config.cfg` entry, so set the config once for a project and just run it.
 
 ## The checks
 
@@ -56,22 +64,31 @@ Flags: `--input`, `--text-column`, `--language-column`, `--key-column`, `--sep`,
 `nonnative_charecters` and `native_script_mismatch` are deliberately disjoint:
 Latin-script languages (Mizo, Garo, Nagamese …) have no Indic range to test
 against, so they are covered by the first and skipped by the second. Both need
-the language column; without it they are skipped with a warning.
+the language column; without it they are skipped with a warning and every other
+check still runs.
 
-Every check is toggled under `[CHECKS]` in `config.cfg`. Thresholds live under
-`[CONTENT_CHECKS]`.
+Toggle any check under `[CHECKS]`. Thresholds live under `[CONTENT_CHECKS]`.
+`language_to_script_mapping.py` holds the language → script table, the Unicode
+ranges and the script-neutral character set — edit it to change what counts as
+in-script.
 
 ## Which rows get checked
 
-Two gates, both in `[INPUT]`:
+Two optional gates, both in `[INPUT]`:
 
 **The condition gate.** `condition_column` / `condition_value` check a row only
-when that column does *not* equal that value. For a QC delivery it is set to
-the exact-match answer, so a row saying the transcript already matches the audio
-is skipped — there is no correction to validate, and any stray text left in the
-correction column would otherwise be reported as if it were one. Leave
-`condition_column` empty to check every row. If the column is missing from a
-file the runner warns and checks everything.
+when that column does *not* equal that value. Useful when only some rows carry
+text worth validating — the shipped config uses it for a QC review export, where
+the reviewer writes a corrected transcription only when the original was wrong:
+
+```ini
+condition_column = Does the transcribed text exactly match the audio?
+condition_value = yes
+```
+
+Blank out `condition_column` to check every row. If the named column is missing
+from a file the runner warns and checks everything rather than skipping it
+silently.
 
 **The blank gate.** Rows whose text is blank are skipped rather than each being
 reported as empty — set `skip_blank_rows = false` to check them too.
@@ -80,7 +97,8 @@ treated as blank.
 
 ## The report
 
-`results/TranscriptionCheckReport_<ts>.xlsx`:
+`results/TranscriptionCheckReport_<ts>.xlsx` — one report per run, covering
+every file checked:
 
 | sheet | contents |
 | --- | --- |
@@ -89,13 +107,16 @@ treated as blank.
 | `<n>_<file>_rows` | every input row plus one boolean `<check>_error` column per check |
 
 `row` is the 1-based line number in the source file, header included, so it
-matches what a spreadsheet shows. ERROR / WARNING / OK rows are filled red /
-amber / green.
+matches what a spreadsheet shows. `key` is the `key_column` value when one is
+set. ERROR / WARNING / OK rows are filled red / amber / green.
 
 Sheet names are numbered and keep the **tail** of the file name: Excel caps
-names at 31 characters, and delivery files often differ only in their last few
+names at 31 characters, and files in a batch often differ only in their last few
 characters (`..._V1`, `..._V2`, `..._V3`), so trimming from the front would give
 every file the same sheet name and silently collapse them onto one sheet.
+
+Each file is checked independently — there is no cross-file comparison, so a
+folder can hold unrelated exports.
 
 ## Layout
 
@@ -107,15 +128,6 @@ every file the same sheet name and silently collapse them onto one sheet.
 | `language_to_script_mapping.py` | language → script, Unicode ranges, script-neutral characters |
 | `config.cfg` | input columns, output directory, thresholds, check toggles |
 
-## Relationship to the TVA pipeline
-
-`transcriptionCheckListFunction.py` and `language_to_script_mapping.py` are
-copies of the modules in `tvaExperiment/tvaDeployment/codes`, and
-`contentChecks.py` is that pipeline's `check_tsv_df_content` with the database
-coupling removed. The checks and their order are unchanged, so a row that fails
-here fails there too.
-
-Because they are copies, a rule change on either side has to be carried across
-by hand. The `jiwer` and `tqdm` imports are guarded here: they are only needed by
-two ASR/LM scoring helpers this repo never calls, so the install stays at pandas
-plus openpyxl.
+`jiwer` and `tqdm` are imported defensively in
+`transcriptionCheckListFunction.py`: they are needed only by two ASR/LM scoring
+helpers nothing here calls, so the install stays at pandas plus openpyxl.
