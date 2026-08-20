@@ -90,10 +90,18 @@ Blank out `condition_column` to check every row. If the named column is missing
 from a file the runner warns and checks everything rather than skipping it
 silently.
 
-**The blank gate.** Rows whose text is blank are skipped rather than each being
-reported as empty — set `skip_blank_rows = false` to check them too.
-`blank_values` lists extra placeholder strings (`nan`, `none`, `null`, `na`)
-treated as blank.
+**The blank gate.** `skip_blank_rows` drops rows whose text is blank instead of
+reporting them as empty. It defaults to **false**, and should stay false
+whenever a condition gate is set: the condition has already removed the rows
+that are *meant* to be blank, so anything still blank is a row that should have
+carried text and did not — a defect worth reporting, not one to hide. Turn it on
+only when there is no condition column available to express "nothing to check
+here".
+
+`blank_values` lists placeholder strings (`nan`, `none`, `null`, `na`) counted
+as blank. They are normalised to empty text before the checks run, so a row
+holding `NA` is reported as `transcript_is_empty` rather than as stray Latin
+characters — the finding then names the actual problem.
 
 ## The report
 

@@ -278,6 +278,12 @@ def main() -> int:
             if n_blank:
                 print(f"  {n_blank} blank row(s) skipped")
         checked = df[keep].copy()
+        # Normalise placeholders to empty text so a row that survived the gates
+        # but carries 'NA' is reported as transcript_is_empty rather than as a
+        # script violation for its Latin letters.
+        if blank_values and text_column in checked.columns:
+            checked[text_column] = checked[text_column].map(
+                lambda v: "" if str(v).strip().lower() in blank_values else v)
 
         findings = run_content_checks(checked, cfg, text_column,
                                       language_column, key_column)
