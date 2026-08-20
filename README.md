@@ -63,9 +63,20 @@ Every check is toggled under `[CHECKS]` in `config.cfg`. Thresholds live under
 
 ## Which rows get checked
 
-By default rows whose text is blank are skipped rather than each being reported
-as empty — set `skip_blank_rows = false` to check them too. `blank_values` lists
-extra placeholder strings (`nan`, `none`, `null`, `na`) treated as blank.
+Two gates, both in `[INPUT]`:
+
+**The condition gate.** `condition_column` / `condition_value` check a row only
+when that column does *not* equal that value. For a QC delivery it is set to
+the exact-match answer, so a row saying the transcript already matches the audio
+is skipped — there is no correction to validate, and any stray text left in the
+correction column would otherwise be reported as if it were one. Leave
+`condition_column` empty to check every row. If the column is missing from a
+file the runner warns and checks everything.
+
+**The blank gate.** Rows whose text is blank are skipped rather than each being
+reported as empty — set `skip_blank_rows = false` to check them too.
+`blank_values` lists extra placeholder strings (`nan`, `none`, `null`, `na`)
+treated as blank.
 
 ## The report
 

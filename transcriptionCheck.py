@@ -219,6 +219,8 @@ def main() -> int:
                                             fallback="File_Name")
     sep = args.sep or cfg.get("INPUT", "sep", fallback="\t")
     sep = sep.replace("\\t", "\t")
+    condition_column = cfg.get("INPUT", "condition_column", fallback="").strip()
+    condition_value = cfg.get("INPUT", "condition_value", fallback="").strip()
     skip_blank = cfg.getboolean("INPUT", "skip_blank_rows", fallback=True)
     blank_values = {v.strip().lower() for v in
                     cfg.get("INPUT", "blank_values", fallback="").split(",")
@@ -248,15 +250,27 @@ def main() -> int:
             print(f"  FAILED to read: {e}")
             continue
 
-        checked = df
+        keep = pd.Series(True, index=df.index)
+        if condition_column:
+            if condition_column in df.columns:
+                # Only rows whose answer is NOT condition_value carry a
+                # correction worth validating.
+                keep &= (df[condition_column].astype(str).str.strip().str.lower()
+                         != condition_value.lower())
+                print(f"  {int((~keep).sum())} row(s) skipped: "
+                      f"'{condition_column}' == '{condition_value}'")
+            else:
+                print(f"  WARNING: condition column '{condition_column}' not in "
+                      f"this file; every row will be checked")
         if skip_blank and text_column in df.columns:
             filled = df[text_column].map(
                 lambda v: str(v).strip() != ""
                 and str(v).strip().lower() not in blank_values)
-            checked = df[filled].copy()
-            if len(checked) != len(df):
-                print(f"  {len(df) - len(checked)} blank row(s) skipped "
-                      f"of {len(df)}")
+            n_blank = int((keep & ~filled).sum())
+            keep &= filled
+            if n_blank:
+                print(f"  {n_blank} blank row(s) skipped")
+        checked = df[keep].copy()
 
         findings = run_content_checks(checked, cfg, text_column,
                                       language_column, key_column)
