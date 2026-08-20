@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+results/
+*.xlsx
+!docs/*.xlsx
+.DS_Store
+.venv/
+venv/
